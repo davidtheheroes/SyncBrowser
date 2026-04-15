@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SyncBrowser.App/SyncBrowser.App.csproj" />
+    <Project Path="src/SyncBrowser.Core/SyncBrowser.Core.csproj" />
+    <Project Path="src/SyncBrowser.Infrastructure/SyncBrowser.Infrastructure.csproj" />
+  </Folder>
+</Solution>

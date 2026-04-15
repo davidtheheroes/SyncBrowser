@@ -1,0 +1,173 @@
+<Window x:Class="SyncBrowser.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:SyncBrowser.App.Views"
+        xmlns:converters="clr-namespace:SyncBrowser.App.Converters"
+        Title="SyncBrowser — Multi-Profile Browser Controller"
+        Width="1400" Height="900"
+        MinWidth="800" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="#0D1117">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <converters:BoolToVisibilityConverter x:Key="BoolToVis"/>
+            <converters:ProfileStatusToColorConverter x:Key="StatusToColor"/>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- Top Toolbar                                 -->
+        <!-- ═══════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="#161B22" Padding="12,8" BorderThickness="0,0,0,1">
+            <Border.BorderBrush>
+                <SolidColorBrush Color="#30363D"/>
+            </Border.BorderBrush>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- App Logo -->
+                <TextBlock Grid.Column="0" Text="🔄" FontSize="22" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <Run Text="Sync" FontSize="16" FontWeight="Bold" Foreground="#58A6FF"/>
+                    <Run Text="Browser" FontSize="16" FontWeight="Light" Foreground="#E6EDF3"/>
+                </TextBlock>
+
+                <!-- Profile Actions -->
+                <Button Grid.Column="2" Content="➕ Add Profile" 
+                        Command="{Binding AddProfileCommand}"
+                        Style="{StaticResource AccentButton}"/>
+
+                <!-- Navigate All URL Bar -->
+                <TextBox Grid.Column="4"
+                         Text="{Binding NavigateAllUrl, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource DarkTextBox}"
+                         VerticalAlignment="Center">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding NavigateAllCommand}"/>
+                    </TextBox.InputBindings>
+                </TextBox>
+
+                <Button Grid.Column="5" Content="🌐 Navigate All"
+                        Command="{Binding NavigateAllCommand}"
+                        Style="{StaticResource DarkButton}"
+                        Margin="6,0,0,0"/>
+
+                <!-- Sync Controls -->
+                <Button Grid.Column="6" Content="{Binding SyncButtonText}"
+                        Command="{Binding ToggleSyncCommand}"
+                        Margin="6,0,0,0">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSyncing}" Value="True">
+                                    <Setter Property="Background">
+                                        <Setter.Value>
+                                            <SolidColorBrush Color="#F85149"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+
+                <!-- Grid Layout -->
+                <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Grid:" Foreground="#8B949E" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <Button Content="2" Command="{Binding SetGridColumnsCommand}" CommandParameter="2"
+                            Style="{StaticResource DarkButton}" Padding="8,4" Margin="0,0,2,0"/>
+                    <Button Content="3" Command="{Binding SetGridColumnsCommand}" CommandParameter="3"
+                            Style="{StaticResource DarkButton}" Padding="8,4" Margin="0,0,2,0"/>
+                    <Button Content="4" Command="{Binding SetGridColumnsCommand}" CommandParameter="4"
+                            Style="{StaticResource DarkButton}" Padding="8,4"/>
+                </StackPanel>
+
+                <!-- Extension Manager -->
+                <Button Grid.Column="9" Content="🧩 Extensions"
+                        Command="{Binding OpenExtensionManagerCommand}"
+                        Style="{StaticResource DarkButton}"
+                        Margin="8,0,0,0"/>
+
+                <!-- Profile Manager -->
+                <Button Grid.Column="10" Content="⚙ Profiles"
+                        Command="{Binding OpenProfileManagerCommand}"
+                        Style="{StaticResource DarkButton}"
+                        Margin="8,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- Browser Grid                                -->
+        <!-- ═══════════════════════════════════════════ -->
+        <ItemsControl Grid.Row="1" 
+                      ItemsSource="{Binding BrowserTabs}"
+                      x:Name="BrowserGrid"
+                      Margin="4">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="{Binding GridColumns}"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <views:BrowserTabView x:Name="BrowserTab"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- Status Bar                                  -->
+        <!-- ═══════════════════════════════════════════ -->
+        <Border Grid.Row="2" Background="#161B22" Padding="12,6" BorderThickness="0,1,0,0">
+            <Border.BorderBrush>
+                <SolidColorBrush Color="#30363D"/>
+            </Border.BorderBrush>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" 
+                           Text="{Binding SyncStatusText}" 
+                           Foreground="#8B949E" FontSize="12"
+                           VerticalAlignment="Center"/>
+
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <Run Text="Profiles: " Foreground="#8B949E" FontSize="12"/>
+                    <Run Text="{Binding BrowserTabs.Count, Mode=OneWay}" Foreground="#58A6FF" FontSize="12" FontWeight="Bold"/>
+                </TextBlock>
+
+                <TextBlock Grid.Column="2" Text="SyncBrowser v1.0" 
+                           Foreground="#484F58" FontSize="11"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
