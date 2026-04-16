@@ -35,9 +35,17 @@ jobs:
           --output ./publish
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          -p:GenerateDocumentationFile=false
+
+      - name: Keep only EXE
+        shell: pwsh
+        run: Get-ChildItem ./publish | Where-Object { $_.Name -ne 'SyncBrowser.exe' } | Remove-Item -Force -Recurse
 
       - name: Create ZIP archive
-        run: Compress-Archive -Path ./publish/* -DestinationPath SyncBrowser-${{ github.ref_name }}-win-x64.zip
+        run: Compress-Archive -Path ./publish/SyncBrowser.exe -DestinationPath SyncBrowser-${{ github.ref_name }}-win-x64.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
