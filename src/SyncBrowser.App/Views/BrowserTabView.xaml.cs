@@ -107,6 +107,16 @@ public partial class BrowserTabView : UserControl
                 Dispatcher.InvokeAsync(() => _viewModel.IsLoading = true);
             };
 
+            // Handle new window requests (links target="_blank") — navigate in current view instead
+            WebView.CoreWebView2.NewWindowRequested += (_, args) =>
+            {
+                args.Handled = true;
+                if (!string.IsNullOrEmpty(args.Uri))
+                {
+                    Dispatcher.InvokeAsync(() => WebView.CoreWebView2.Navigate(args.Uri));
+                }
+            };
+
             // Register with MainViewModel for sync
             _mainViewModel.RegisterWebView(_viewModel.ProfileId, WebView.CoreWebView2);
 
@@ -245,6 +255,8 @@ public partial class BrowserTabView : UserControl
     /// <summary>
     /// The JS script that captures all input events and posts them to C#.
     /// Extracted as a constant so it can be reused for re-injection.
+    /// Importantly: does NOT call preventDefault() on events to allow browser default behavior
+    /// (e.g., copy/paste, form submission) to proceed normally.
     /// </summary>
     private const string CaptureScript = @"
         (function() {
@@ -280,11 +292,16 @@ public partial class BrowserTabView : UserControl
             }, true);
 
             document.addEventListener('keydown', e => {
-                const msg = { type: 'keyDown', key: e.key, code: e.code, keyCode: e.keyCode, modifiers: getMods(e) };
-                if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-                    msg.text = e.key;
+                // Don't capture Ctrl+V, Ctrl+C, Ctrl+X to allow paste/copy/cut to work
+                const isCopyPasteShortcut = e.ctrlKey && (e.key === 'v' || e.key === 'V' || e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X') ||
+                                          e.metaKey && (e.key === 'v' || e.key === 'V' || e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X');
+                if (!isCopyPasteShortcut) {
+                    const msg = { type: 'keyDown', key: e.key, code: e.code, keyCode: e.keyCode, modifiers: getMods(e) };
+                    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+                        msg.text = e.key;
+                    }
+                    post(msg);
                 }
-                post(msg);
             }, true);
 
             document.addEventListener('keyup', e => {
