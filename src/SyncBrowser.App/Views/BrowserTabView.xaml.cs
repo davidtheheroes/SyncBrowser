@@ -36,15 +36,20 @@ public partial class BrowserTabView : UserControl
         _viewModel = DataContext as BrowserTabViewModel;
         if (_viewModel != null)
         {
-            // Bridge ViewModel actions to WebView2 control
+            // Bridge ViewModel actions to WebView2 control.
+            // Use Dispatcher.InvokeAsync so each Navigate() is queued independently —
+            // one slow WebView2 teardown won't block the others during Navigate All.
             _viewModel.NavigateAction = url =>
             {
                 if (WebView.CoreWebView2 != null)
-                    WebView.CoreWebView2.Navigate(url);
+                    Dispatcher.InvokeAsync(() => WebView.CoreWebView2.Navigate(url));
             };
-            _viewModel.ReloadAction = () => WebView.CoreWebView2?.Reload();
-            _viewModel.GoBackAction = () => WebView.CoreWebView2?.GoBack();
-            _viewModel.GoForwardAction = () => WebView.CoreWebView2?.GoForward();
+            _viewModel.ReloadAction = () =>
+                Dispatcher.InvokeAsync(() => WebView.CoreWebView2?.Reload());
+            _viewModel.GoBackAction = () =>
+                Dispatcher.InvokeAsync(() => WebView.CoreWebView2?.GoBack());
+            _viewModel.GoForwardAction = () =>
+                Dispatcher.InvokeAsync(() => WebView.CoreWebView2?.GoForward());
         }
     }
 
@@ -71,6 +76,12 @@ public partial class BrowserTabView : UserControl
 
             await WebView.EnsureCoreWebView2Async(environment);
 
+            // Auto-inject capture script on every new document creation.
+            // Runs BEFORE NavigationCompleted, so input capture is ready
+            // while the page is still loading — eliminates the multi-second
+            // gap after Navigate All.
+            await WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(CaptureScript);
+
             // Load extensions into this profile
             await LoadExtensionsAsync();
 
@@ -80,10 +91,10 @@ public partial class BrowserTabView : UserControl
                 WebView.CoreWebView2.Settings.UserAgent = _viewModel.Profile.UserAgent;
             }
 
-            // Listen for navigation events
+            // Listen for navigation events (InvokeAsync to avoid blocking WebView2)
             WebView.CoreWebView2.NavigationCompleted += (_, args) =>
             {
-                Dispatcher.Invoke(() =>
+                Dispatcher.InvokeAsync(() =>
                 {
                     _viewModel.CurrentUrl = WebView.CoreWebView2.Source;
                     _viewModel.Title = WebView.CoreWebView2.DocumentTitle;
@@ -93,13 +104,13 @@ public partial class BrowserTabView : UserControl
 
             WebView.CoreWebView2.NavigationStarting += (_, _) =>
             {
-                Dispatcher.Invoke(() => _viewModel.IsLoading = true);
+                Dispatcher.InvokeAsync(() => _viewModel.IsLoading = true);
             };
 
             // Register with MainViewModel for sync
             _mainViewModel.RegisterWebView(_viewModel.ProfileId, WebView.CoreWebView2);
 
-            // Set up input capture for master browser
+            // Set up input message handler
             SetupInputCapture();
 
             // Navigate to start URL
@@ -140,21 +151,14 @@ public partial class BrowserTabView : UserControl
     }
 
     /// <summary>
-    /// Injects JavaScript to capture mouse and keyboard events on the master browser
-    /// and forwards them to the SyncMediator via the ViewModel.
+    /// Registers the WebMessageReceived handler that forwards captured input
+    /// from the master browser to the SyncMediator.
+    /// The JS capture script itself is auto-injected via AddScriptToExecuteOnDocumentCreatedAsync.
     /// </summary>
     private void SetupInputCapture()
     {
         if (WebView.CoreWebView2 == null || _viewModel == null) return;
 
-        // Inject input capture script after each navigation
-        WebView.CoreWebView2.NavigationCompleted += async (_, _) =>
-        {
-            if (!_viewModel.IsMaster) return;
-            await InjectCaptureScriptAsync();
-        };
-
-        // Handle messages from injected script
         WebView.CoreWebView2.WebMessageReceived += async (_, args) =>
         {
             if (!_viewModel.IsMaster || _mainViewModel == null) return;
@@ -226,33 +230,16 @@ public partial class BrowserTabView : UserControl
 
     /// <summary>
     /// Re-registers this WebView2 with the mediator (called after master change).
-    /// If this tab is now the master, injects the JS capture script immediately.
+    /// No script injection needed — capture script is already running on all tabs
+    /// via AddScriptToExecuteOnDocumentCreatedAsync. The WebMessageReceived handler
+    /// filters by IsMaster so events are only forwarded from the active master.
     /// </summary>
-    public async void ReRegister()
+    public void ReRegister()
     {
         if (WebView.CoreWebView2 != null && _viewModel != null)
         {
             _mainViewModel?.RegisterWebView(_viewModel.ProfileId, WebView.CoreWebView2);
-
-            // If this tab just became master, inject capture script now
-            if (_viewModel.IsMaster)
-            {
-                // Reset the guard flag so script re-injects
-                await WebView.CoreWebView2.ExecuteScriptAsync(
-                    "window.__syncBrowserCapture = false;");
-                await InjectCaptureScriptAsync();
-            }
         }
-    }
-
-    /// <summary>
-    /// Injects the JS input capture script into the current page.
-    /// </summary>
-    private async Task InjectCaptureScriptAsync()
-    {
-        if (WebView.CoreWebView2 == null) return;
-
-        await WebView.CoreWebView2.ExecuteScriptAsync(CaptureScript);
     }
 
     /// <summary>
